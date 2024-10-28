@@ -2,21 +2,15 @@
 
 cd $(dirname $0)/..
 
-# It's recommended to use the exact version of AnyCable here
-version="1.5.6"
-
-if [ ! -f ./bin/dist/anycable-go ]; then
-  echo "AnyCable server is not installed, downloading..."
-  ./bin/rails g anycable:download --version=$version --bin-path=./bin/dist
+# if CLEAN=1, remove previous build
+if [ "$CLEAN" = "1" ]; then
+  echo "Cleaning up..."
+  rm -rf ./bin/dist
 fi
 
-curVersion=$(./bin/dist/anycable-go -v)
-
-if [[ "$version" != "latest" ]]; then
-  if [[ "$curVersion" != "$version"* ]]; then
-    echo "AnyCable server version is not $version, downloading a new one..."
-    ./bin/rails g anycable:download --version=$version --bin-path=./bin/dist
-  fi
+if [ ! -f ./bin/dist/anycable-go ]; then
+  echo "Building AnyCable server..."
+  (cd cable && OUTPUT=../bin/dist/anycable-go make build)
 fi
 
 ./bin/dist/anycable-go $@
