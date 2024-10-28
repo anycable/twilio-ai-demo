@@ -1,0 +1,30 @@
+<% content_for :title, "ToDos" %>
+<%= turbo_frame_tag :dialog %>
+
+<header class="glass-morphism rounded-xl p-6 mb-8 flex flex-col sm:flex-row justify-between items-center gap-4">
+  <h1 class="text-4xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 text-transparent bg-clip-text">
+    On your plate 🍽
+  </h1>
+  <nav class="flex space-x-2">
+    <%= link_to "Current", todos_path, class: "px-4 py-2 rounded-lg transition-all duration-200 hover:bg-indigo-100 data-[active=true]:bg-indigo-500 data-[active=true]:text-white", data: {active: params[:scope] == "current"} %>
+    <%= link_to "Archive", archive_todos_path, class: "px-4 py-2 rounded-lg transition-all duration-200 hover:bg-indigo-100 data-[active=true]:bg-indigo-500 data-[active=true]:text-white", data: {active: params[:scope] == "archive"} %>
+    <%= link_to "Stale", stale_todos_path, class: "px-4 py-2 rounded-lg transition-all duration-200 hover:bg-indigo-100 data-[active=true]:bg-indigo-500 data-[active=true]:text-white", data: {active: params[:scope] == "stale"} %>
+  </nav>
+</header>
+
+<div id="todoList" class="space-y-6">
+  <% @todos.each do |date, items| %>
+    <div class="glass-morphism rounded-xl p-6 todo-enter">
+      <h2 class="text-lg font-semibold text-gray-800 mb-4"><%= l(date) %></h2>
+      <ul class="space-y-3">
+        <%= render partial: "todo", collection: items %>
+      </ul>
+    </div>
+  <% end %>
+</div>
+
+<%= button_to new_todo_path, method: :get, form: {data: {turbo_frame: "dialog"}}, class: "fixed bottom-8 right-8 gradient-bg text-white rounded-full p-4 shadow-lg hover:shadow-xl transition-all duration-200 group" do %>
+  <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 transform group-hover:rotate-90 transition-transform duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+  </svg>
+<% end %>
