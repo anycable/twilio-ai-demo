@@ -1,10 +1,16 @@
 class Todo < ApplicationRecord
+  include Turbo::Broadcastable
+
   validates :description, :deadline, presence: true
 
   # That must be implemented via a form object, but for now, we can use a virtual attribute.
   attribute :completed, :boolean, default: false
   before_validation { self.completed_at = completed ? Time.current : nil }
   after_initialize { self.completed = completed_at.present? }
+
+  # Realtime features
+  after_create_commit { broadcast_replace_to "todos", target: "new_item_notification", partial: "todos/item_added", locals: {todo: self} }
+  after_update_commit { broadcast_replace_to "todos" }
 
   scope :completed, -> { where.not(completed_at: nil) }
   scope :incomplete, -> { where(completed_at: nil) }

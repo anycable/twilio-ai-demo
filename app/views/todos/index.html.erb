@@ -13,6 +13,8 @@
 </header>
 
 <div id="todoList" class="space-y-6">
+  <%= turbo_stream_from "todos" %>
+  <%= render "item_added" if params[:scope] == "current" %>
   <% @todos.each do |date, items| %>
     <div class="glass-morphism rounded-xl p-6 todo-enter">
       <h2 class="text-lg font-semibold text-gray-800 mb-4"><%= l(date) %></h2>
