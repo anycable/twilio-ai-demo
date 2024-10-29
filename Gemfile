@@ -12,6 +12,9 @@ gem "turbo-rails"
 gem "stimulus-rails"
 gem "tailwindcss-rails"
 
+gem "anyway_config"
+gem "twilio-ruby"
+
 group :development do
   gem "overmind"
 end

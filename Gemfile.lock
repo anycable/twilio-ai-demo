@@ -106,6 +106,12 @@ GEM
       reline (>= 0.3.8)
     drb (2.2.1)
     erubi (1.13.0)
+    faraday (2.12.0)
+      faraday-net_http (>= 2.0, < 3.4)
+      json
+      logger
+    faraday-net_http (3.3.0)
+      net-http
     globalid (1.2.1)
       activesupport (>= 6.1)
     google-protobuf (3.25.5)
@@ -144,6 +150,9 @@ GEM
     irb (1.14.1)
       rdoc (>= 4.0.0)
       reline (>= 0.4.2)
+    json (2.7.4)
+    jwt (2.9.3)
+      base64
     logger (1.6.1)
     loofah (2.23.1)
       crass (~> 1.0.2)
@@ -156,6 +165,8 @@ GEM
     marcel (1.0.4)
     mini_mime (1.1.5)
     minitest (5.25.1)
+    net-http (0.4.1)
+      uri
     net-imap (0.5.0)
       date
       net-protocol
@@ -265,6 +276,10 @@ GEM
     turbo-rails (2.0.11)
       actionpack (>= 6.0.0)
       railties (>= 6.0.0)
+    twilio-ruby (7.3.5)
+      faraday (>= 0.9, < 3.0)
+      jwt (>= 1.5, < 3.0)
+      nokogiri (>= 1.6, < 2.0)
     tzinfo (2.0.6)
       concurrent-ruby (~> 1.0)
     uri (0.13.1)
@@ -294,6 +309,7 @@ PLATFORMS
 DEPENDENCIES
   actioncable-next
   anycable-rails
+  anyway_config
   debug
   importmap-rails
   overmind
@@ -304,6 +320,7 @@ DEPENDENCIES
   stimulus-rails
   tailwindcss-rails
   turbo-rails
+  twilio-ruby
 
 BUNDLED WITH
    2.5.18

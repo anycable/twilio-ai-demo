@@ -10,6 +10,31 @@ dialog::backdrop {
   animation: slide-in 0.3s ease-out;
 }
 
+.call-status {
+  @apply px-2 text-sm;
+}
+
+.call-status--ringing {
+  @apply text-teal-800;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.call-status--completed {
+  @apply text-orange-600;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
 @keyframes slide-in {
   from {
     opacity: 0;

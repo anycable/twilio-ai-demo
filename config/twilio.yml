@@ -1,0 +1,8 @@
+default: &default
+  phone_number: "+18775357613"
+
+development:
+  <<: *default
+
+production:
+  <<: *default

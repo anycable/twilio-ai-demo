@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"time"
 
 	acli "github.com/anycable/anycable-go/cli"
 	aconfig "github.com/anycable/anycable-go/config"
+	"github.com/anycable/anycable-go/logger"
 	"github.com/anycable/anycable-go/metrics"
 	"github.com/anycable/anycable-go/node"
 	"github.com/anycable/anycable-go/server"
@@ -15,21 +17,26 @@ import (
 
 	"github.com/palkan/twilio-ai-cable/internal/fake_rpc"
 	"github.com/palkan/twilio-ai-cable/pkg/config"
-	"github.com/palkan/twilio-ai-cable/pkg/custom"
+	"github.com/palkan/twilio-ai-cable/pkg/twilio"
 	"github.com/palkan/twilio-ai-cable/pkg/version"
 )
 
 func Run(conf *config.Config, anyconf *aconfig.Config) error {
 	// Configure your logger here
-	logger := slog.Default()
-
-	anycable, err := initAnyCableRunner(conf, anyconf, logger)
+	logHandler, err := logger.InitLogger(anyconf.Log.LogFormat, anyconf.Log.LogLevel)
+	log := slog.New(logHandler)
 
 	if err != nil {
 		return err
 	}
 
-	logger.Info(fmt.Sprintf("Starting custom AnyCable v%s", version.Version()))
+	anycable, err := initAnyCableRunner(conf, anyconf, log)
+
+	if err != nil {
+		return err
+	}
+
+	log.Info(fmt.Sprintf("Starting Twilio AnyCable v%s", version.Version()))
 
 	return anycable.Run()
 }
@@ -37,11 +44,10 @@ func Run(conf *config.Config, anyconf *aconfig.Config) error {
 func initAnyCableRunner(appConf *config.Config, anyConf *aconfig.Config, l *slog.Logger) (*acli.Runner, error) {
 	opts := []acli.Option{
 		acli.WithName("AnyCable"),
-		acli.WithLogger(l),
 		acli.WithDefaultSubscriber(),
 		acli.WithDefaultBroker(),
 		acli.WithDefaultBroadcaster(),
-		acli.WithWebSocketEndpoint("/ws", myWebsocketHandler(appConf)),
+		acli.WithWebSocketEndpoint("/twilio", twilioWebsocketHandler(appConf)),
 	}
 
 	if appConf.FakeRPC {
@@ -55,26 +61,21 @@ func initAnyCableRunner(appConf *config.Config, anyConf *aconfig.Config, l *slog
 	return acli.NewRunner(anyConf, opts)
 }
 
-func myWebsocketHandler(config *config.Config) func(n *node.Node, c *aconfig.Config, lg *slog.Logger) (http.Handler, error) {
+func twilioWebsocketHandler(config *config.Config) func(n *node.Node, c *aconfig.Config, lg *slog.Logger) (http.Handler, error) {
 	return func(n *node.Node, c *aconfig.Config, lg *slog.Logger) (http.Handler, error) {
 		extractor := server.DefaultHeadersExtractor{Headers: c.RPC.ProxyHeaders, Cookies: c.RPC.ProxyCookies}
 
-		executor := custom.NewExecutor(n)
+		executor := twilio.NewExecutor(n, config)
 
-		lg.Info(fmt.Sprintf("Handle custom WebSocket connections at ws://%s:%d/ws", c.Server.Host, c.Server.Port))
+		lg.Info(fmt.Sprintf("Handle Twilio Media Streams connections at ws://%s:%d/twilio", c.Server.Host, c.Server.Port))
 
 		return ws.WebsocketHandler([]string{}, &extractor, &c.WS, lg, func(wsc *websocket.Conn, info *server.RequestInfo, callback func()) error {
 			wrappedConn := ws.NewConnection(wsc)
 			session := node.NewSession(
 				n, wrappedConn, info.URL, info.Headers, info.UID,
-				node.WithEncoder(custom.Encoder{}), node.WithExecutor(executor),
+				node.WithEncoder(twilio.Encoder{}), node.WithExecutor(executor),
+				node.WithHandshakeMessageDeadline(time.Now().Add(5*time.Second)),
 			)
-
-			_, err := n.Authenticate(session)
-
-			if err != nil {
-				return err
-			}
 
 			return session.Serve(callback)
 		}), nil

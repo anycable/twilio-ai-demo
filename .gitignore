@@ -36,3 +36,8 @@
 /app/assets/builds/*
 !/app/assets/builds/.keep
 bin/dist
+
+/config/*.local.yml
+/config/credentials/local.*
+
+/config/credentials/development.key

@@ -1,0 +1,9 @@
+<%# locals: (phone_call:) %>
+<div class="glass-morphism rounded-xl p-4 todo-enter" id="call-<%= phone_call.sid %>">
+  <header class="flex justify-between align-middle">
+    <h2 class="text-lg font-semibold text-gray-800 mb-4">From: <%= phone_call.from.sub(/(^\+\d{2})\d+(\d{4})$/, '\1****\2') %></h2>
+    <span class="call-status call-status--<%= phone_call.status %>"><%= phone_call.status %></span>
+  </header>
+  <div id="call-<%= phone_call.sid %>-logs" data-turbo-permanent>
+  </div>
+</div>
