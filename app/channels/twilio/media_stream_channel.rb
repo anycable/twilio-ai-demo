@@ -7,7 +7,7 @@ module Twilio
 
       self.ai_voice = AIService::VOICES.sample
 
-      greeting = "Hi, I'm Aike. Here is my favourite Simpsons quote: #{Faker::TvShows::Simpsons.quote}"
+      greeting = "Hi, I'm #{ai_voice.humanize}. Here is my favourite Simpsons quote: #{Faker::TvShows::Simpsons.quote}. How can I help you today?"
 
       transmit_message(:greeting, greeting)
     end
@@ -18,7 +18,19 @@ module Twilio
 
     # OpenAI tools
     def configure_openai
-      reply_with("openai.configuration", {api_key: OpenAIConfig.api_key, voice: ai_voice})
+      config = OpenAIConfig
+
+      api_key = config.api_key
+      voice = ai_voice
+      prompt = config.prompt
+
+      reply_with("openai.configuration", {api_key:, voice:, prompt:})
+    end
+
+    def handle_transcript(data)
+      direction = data["role"] == "user" ? "<" : ">"
+
+      broadcast_log "#{direction} #{data["text"]}", id: data["id"]
     end
 
     def unsubscribed
@@ -52,7 +64,7 @@ module Twilio
       })
     end
 
-    def broadcast_log(msg) = twilio.broadcast_logs(call_sid, msg)
+    def broadcast_log(...) = twilio.broadcast_logs(call_sid, ...)
 
     def twilio = @twilio ||= TwilioService.new
 

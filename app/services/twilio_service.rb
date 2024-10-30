@@ -15,11 +15,9 @@ class TwilioService
     call.sid
   end
 
-  DEFAULT_WELCOME_PHRASE = "Hey! Let me connect you to our AI agent..."
-
-  def setup_stream_response(message = DEFAULT_WELCOME_PHRASE)
+  def setup_stream_response(message = nil)
     Twilio::TwiML::VoiceResponse.new do |r|
-      r.say(message:)
+      r.say(message:) if message
       r.connect do
         _1.stream(url: config.stream_callback)
       end
@@ -27,12 +25,12 @@ class TwilioService
     end.to_s
   end
 
-  def broadcast_logs(call_sid, msg)
+  def broadcast_logs(call_sid, msg, id: SecureRandom.hex(4))
     Turbo::StreamsChannel.broadcast_append_to(
       "phone_calls",
       target: "call-#{call_sid}-logs",
       partial: "phone_calls/phone_call_log",
-      locals: {text: msg}
+      locals: {text: msg, id:}
     )
   end
 

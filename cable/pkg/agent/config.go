@@ -1,10 +1,11 @@
 package agent
 
 type Config struct {
-	URL   string
-	Key   string
-	Model string
-	Voice string
+	URL    string
+	Key    string
+	Model  string
+	Voice  string
+	Prompt string
 }
 
 func NewConfig(key string) *Config {

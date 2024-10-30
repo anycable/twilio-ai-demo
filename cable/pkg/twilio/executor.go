@@ -78,6 +78,10 @@ func (ex *Executor) HandleCommand(s *node.Session, msg *common.Message) error {
 		callSid := start.CallSID
 		streamSid := start.StreamSID
 
+		// Store identifiers in the session
+		s.WriteInternalState("callSid", callSid)
+		s.WriteInternalState("streamSid", streamSid)
+
 		identifiers := string(utils.ToJSON(map[string]string{"call_sid": callSid, "stream_sid": streamSid}))
 
 		ex.node.Authenticated(s, identifiers)
@@ -203,7 +207,31 @@ func (ex *Executor) initAgent(s *node.Session) error {
 		conf.Voice = data.Voice
 	}
 
+	if data.Prompt != "" {
+		conf.Prompt = data.Prompt
+	}
+
 	agent := agent.NewAgent(conf, s.Log)
+
+	agent.HandleTranscript(func(role string, text string, id string) {
+		_, err := ex.performRPC(s, "handle_transcript", map[string]string{"role": role, "text": text, "id": id})
+
+		if err != nil {
+			s.Log.Error("failed to peroform handle_transcript rpc", "error", err)
+		}
+	})
+
+	agent.HandleAudio(func(encodedAudio string, id string) {
+		var streamSid string
+		if val, ok := s.ReadInternalState("streamSid"); ok {
+			streamSid = val.(string)
+		} else {
+			return
+		}
+
+		s.Send(&common.Reply{Type: MediaEvent, Message: MediaPayload{Payload: encodedAudio}, Identifier: streamSid})
+		s.Send(&common.Reply{Type: MarkEvent, Message: MarkPayload{Name: `ai-delta-` + id}, Identifier: streamSid})
+	})
 
 	err = agent.KickOff(context.Background())
 	if err != nil {

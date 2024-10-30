@@ -15,6 +15,9 @@ import (
 	"github.com/joomcode/errorx"
 )
 
+type TranscriptHandler = func(role string, text string, id string)
+type AudioHandler = func(data string, id string)
+
 // Agent represents a single Twilio Stream consumer connected
 // to OpenAI realtime API
 type Agent struct {
@@ -25,6 +28,9 @@ type Agent struct {
 	sendCh chan []byte
 
 	log *slog.Logger
+
+	transcriptHandler TranscriptHandler
+	audioHandler      AudioHandler
 
 	cancelFn context.CancelFunc
 	connMu   sync.RWMutex
@@ -45,6 +51,14 @@ func NewAgent(c *Config, l *slog.Logger) *Agent {
 		sendCh: make(chan []byte, 128),
 		log:    l.With("component", "openai"),
 	}
+}
+
+func (a *Agent) HandleTranscript(handler TranscriptHandler) {
+	a.transcriptHandler = handler
+}
+
+func (a *Agent) HandleAudio(handler AudioHandler) {
+	a.audioHandler = handler
 }
 
 // KickOff starts the OpenAI WebSocket connection.
@@ -80,6 +94,10 @@ func (a *Agent) KickOff(ctx context.Context) error {
 				"model": "whisper-1",
 			},
 		},
+	}
+
+	if a.conf.Prompt != "" {
+		sessionConfig["session"].(map[string]interface{})["instructions"] = a.conf.Prompt
 	}
 
 	configMessage := utils.ToJSON(sessionConfig)
@@ -147,19 +165,33 @@ func (a *Agent) readMessages() {
 			var event *InputAudioTranscriptionCompletedEvent
 			_ = json.Unmarshal(msg, &event)
 
-			a.handleUserTranscription(event)
+			a.handleTranscript(event)
 		case "response.created":
 		case "rate_limits.updated":
 		case "response.output_item.added":
 		case "conversation.item.created":
 		case "response.content_part.added":
 		case "response.audio.delta":
+			var event *AudioDeltaEvent
+			_ = json.Unmarshal(msg, &event)
+
+			a.handleAudio(event)
 		case "response.audio_transcript.delta":
+			var event *AudioTranscriptDeltaEvent
+			_ = json.Unmarshal(msg, &event)
+
+			a.handleTranscript(event)
 		case "response.audio.done":
 		case "response.audio_transcript.done":
+			var event *AudioTranscriptDoneEvent
+			_ = json.Unmarshal(msg, &event)
+
+			a.handleTranscript(event)
 		case "response.content_part.done":
 		case "response.output_item.done":
 		case "response.done":
+		case "error":
+			a.log.Error("server error", "err", string(msg))
 		default:
 			a.log.Warn("unhandled message type", "type", typedMessage.Type)
 		}
@@ -194,10 +226,25 @@ func (a *Agent) sendAudio(audio []byte) error {
 	return nil
 }
 
-func (a *Agent) handleUserTranscription(ev *InputAudioTranscriptionCompletedEvent) {
-	if ev.Transcript == "" {
+func (a *Agent) handleTranscript(ev TranscriptEvent) {
+	text := ev.GetTranscript()
+
+	if text == "" {
 		return
 	}
 
-	a.log.Info("Message from user", "text", ev.Transcript)
+	role := ev.GetRole()
+	id := ev.GetItemId()
+
+	a.log.Info("transcript", "text", text, "role", role, "id", id)
+
+	if a.transcriptHandler != nil {
+		a.transcriptHandler(role, text, id)
+	}
+}
+
+func (a *Agent) handleAudio(ev *AudioDeltaEvent) {
+	if a.audioHandler != nil {
+		a.audioHandler(ev.Delta, ev.ItemId)
+	}
 }

@@ -46,5 +46,7 @@ module TwilioAiDemo
 
     # Don't generate system test files.
     config.generators.system_tests = nil
+
+    config.anyway_config.future.use :unwrap_known_environments
   end
 end

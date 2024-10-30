@@ -1,4 +1,5 @@
-AnyCable.configure_server do
+Rails.application.config.to_prepare do
+  # Make sure the factory is set on reloading
   AnyCable.connection_factory = AnyCable::Rails::ConnectionFactory.new do
     map "/cable" do
       ApplicationConnection
