@@ -1,5 +1,7 @@
 class TwilioStreamChannel < ApplicationChannel
   state_attr_accessor :ai_voice
+  # State used by the AI agent
+  state_attr_accessor :openai_key
 
   def subscribed
     broadcast_log "Media stream has started"
@@ -9,6 +11,8 @@ class TwilioStreamChannel < ApplicationChannel
     greeting = "Hi, I'm Aike. Here is my favourite Simpsons quote: #{Faker::TvShows::Simpsons.quote}"
 
     transmit_message(:greeting, greeting)
+
+    self.openai_key = OpenAIConfig.api_key
   end
 
   def handle_dtmf(data)

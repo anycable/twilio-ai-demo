@@ -1,6 +1,8 @@
 package twilio
 
 import (
+	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,6 +12,7 @@ import (
 	"github.com/anycable/anycable-go/utils"
 	"github.com/anycable/anycable-go/ws"
 
+	"github.com/palkan/twilio-ai-cable/pkg/agent"
 	"github.com/palkan/twilio-ai-cable/pkg/config"
 )
 
@@ -58,9 +61,8 @@ func (ex *Executor) HandleCommand(s *node.Session, msg *common.Message) error {
 			return fmt.Errorf("Malformed start message: %v", msg.Data)
 		}
 
-		s.InternalState = make(map[string]interface{})
-		s.InternalState["callSid"] = start.CallSID
-		s.InternalState["streamSid"] = start.StreamSID
+		s.WriteInternalState("callSid", start.CallSID)
+		s.WriteInternalState("streamSid", start.StreamSID)
 
 		// We add account SID as a header to the sesssion.
 		// So, we can access it via request.headers['x-twilio-account'] in Ruby.
@@ -75,8 +77,16 @@ func (ex *Executor) HandleCommand(s *node.Session, msg *common.Message) error {
 			return err
 		}
 
+		identifier := channelId(start.CallSID, start.StreamSID)
+
 		// We need to perform an additional RPC call to initialize the channel subscription
-		_, err = ex.node.Subscribe(s, &common.Message{Identifier: channelId(start.CallSID, start.StreamSID), Command: "subscribe"})
+		_, err = ex.node.Subscribe(s, &common.Message{Identifier: identifier, Command: "subscribe"})
+
+		if err != nil {
+			return err
+		}
+
+		err = ex.initAgent(s, identifier)
 
 		if err != nil {
 			return err
@@ -93,9 +103,21 @@ func (ex *Executor) HandleCommand(s *node.Session, msg *common.Message) error {
 			return nil
 		}
 
-		// TODO: implement audio processing
+		ai := ex.getAI(s)
 
-		return nil
+		if ai == nil {
+			return nil
+		}
+
+		audioBytes, err := base64.StdEncoding.DecodeString(twilioMsg.Payload)
+
+		if err != nil {
+			return err
+		}
+
+		err = ai.EnqueueAudio(audioBytes)
+
+		return err
 	}
 
 	if msg.Command == MarkEvent {
@@ -123,13 +145,71 @@ func (ex *Executor) HandleCommand(s *node.Session, msg *common.Message) error {
 }
 
 func (ex *Executor) Disconnect(s *node.Session) error {
-	// TODO: implement AI session cleanup
+	ai := ex.getAI(s)
+
+	if ai != nil {
+		ai.Close()
+	}
+
 	return ex.node.Disconnect(s)
 }
 
+func (ex *Executor) initAgent(s *node.Session, identifier string) error {
+	openAIKey := strChannelState(s, identifier, "openai_key")
+
+	if openAIKey == "" {
+		return errors.New("OpenAI key is not set")
+	}
+
+	conf := agent.NewConfig(openAIKey)
+
+	openAIModel := strChannelState(s, identifier, "openai_model")
+	if openAIModel != "" {
+		conf.Model = openAIModel
+	}
+
+	openAIVoice := strChannelState(s, identifier, "ai_voice")
+	if openAIVoice != "" {
+		conf.Voice = openAIVoice
+	}
+
+	agent := agent.NewAgent(conf, s.Log)
+
+	err := agent.KickOff(context.Background())
+	if err != nil {
+		return err
+	}
+
+	s.WriteInternalState("agent", agent)
+
+	return nil
+}
+
+func (ex *Executor) getAI(s *node.Session) *agent.Agent {
+	var ai *agent.Agent
+
+	if rawAgent, ok := s.ReadInternalState("agent"); ok {
+		ai = rawAgent.(*agent.Agent)
+	}
+
+	return ai
+}
+
 func (ex *Executor) performRPC(s *node.Session, action string, data map[string]string) (*common.CommandResult, error) {
-	callSID := s.InternalState["callSid"].(string)
-	streamSID := s.InternalState["streamSid"].(string)
+	var callSID string
+	var streamSID string
+
+	if val, found := s.ReadInternalState("callSid"); found {
+		callSID = val.(string)
+	} else {
+		return nil, errors.New("Call SID not found")
+	}
+
+	if val, found := s.ReadInternalState("streamSid"); found {
+		streamSID = val.(string)
+	} else {
+		return nil, errors.New("Stream SID not found")
+	}
 
 	data["action"] = action
 
@@ -140,6 +220,23 @@ func (ex *Executor) performRPC(s *node.Session, action string, data map[string]s
 		Command:    "message",
 		Data:       string(payload),
 	})
+}
+
+func strChannelState(s *node.Session, identifier string, key string) string {
+	jsonVal := s.GetEnv().GetChannelStateField(identifier, key)
+
+	if jsonVal == "" {
+		return ""
+	}
+
+	var val string
+	err := json.Unmarshal([]byte(jsonVal), &val)
+
+	if err != nil {
+		return ""
+	}
+
+	return val
 }
 
 func channelId(callSid string, streamSid string) string {
