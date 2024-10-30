@@ -11,22 +11,28 @@ import (
 	"github.com/anycable/anycable-go/node"
 	"github.com/anycable/anycable-go/utils"
 	"github.com/anycable/anycable-go/ws"
+	"github.com/joomcode/errorx"
 
 	"github.com/palkan/twilio-ai-cable/pkg/agent"
-	"github.com/palkan/twilio-ai-cable/pkg/config"
 )
 
-const channelName = "TwilioStreamChannel"
+const channelName = "Twilio::MediaStreamChannel"
+const responseState = "anycable_response"
+
+type AppResponse struct {
+	Event string          `json:"event"`
+	Data  json.RawMessage `json:"data"`
+}
 
 // Handling Twilio events and transforming them into Action Cable commands
 type Executor struct {
 	node node.AppNode
-	conf *config.Config
+	conf *Config
 }
 
 var _ node.Executor = (*Executor)(nil)
 
-func NewExecutor(node node.AppNode, c *config.Config) *Executor {
+func NewExecutor(node node.AppNode, c *Config) *Executor {
 	return &Executor{node: node, conf: c}
 }
 
@@ -51,7 +57,7 @@ func (ex *Executor) HandleCommand(s *node.Session, msg *common.Message) error {
 	}
 
 	// That's the first message with some additional information.
-	// Here we should perform authentication (#kick_off)
+	// Here we should perform authentication and start the AI session.
 	if msg.Command == StartEvent {
 		start, ok := msg.Data.(StartPayload)
 
@@ -61,32 +67,30 @@ func (ex *Executor) HandleCommand(s *node.Session, msg *common.Message) error {
 			return fmt.Errorf("Malformed start message: %v", msg.Data)
 		}
 
-		s.WriteInternalState("callSid", start.CallSID)
-		s.WriteInternalState("streamSid", start.StreamSID)
-
-		// We add account SID as a header to the sesssion.
-		// So, we can access it via request.headers['x-twilio-account'] in Ruby.
-		s.GetEnv().SetHeader("x-twilio-account", start.AccountSID)
-		res, err := ex.node.Authenticate(s)
-
-		if res != nil && res.Status == common.FAILURE {
+		// Check if account SID matches and reject the connection if not
+		if ex.conf.AccountSID != "" && ex.conf.AccountSID != start.AccountSID {
+			s.Log.Debug("unauthenticated stream", "account_sid", start.AccountSID[0:5]+"***")
+			s.Disconnect("Auth Failed", ws.CloseNormalClosure)
 			return nil
 		}
 
+		// Mark as authenticated and store the identifiers
+		callSid := start.CallSID
+		streamSid := start.StreamSID
+
+		identifiers := string(utils.ToJSON(map[string]string{"call_sid": callSid, "stream_sid": streamSid}))
+
+		ex.node.Authenticated(s, identifiers)
+
+		// Now, subscribe to the channel to initialize the session
+		identifier := channelId(s)
+		_, err := ex.node.Subscribe(s, &common.Message{Identifier: identifier, Command: "subscribe"})
+
 		if err != nil {
 			return err
 		}
 
-		identifier := channelId(start.CallSID, start.StreamSID)
-
-		// We need to perform an additional RPC call to initialize the channel subscription
-		_, err = ex.node.Subscribe(s, &common.Message{Identifier: identifier, Command: "subscribe"})
-
-		if err != nil {
-			return err
-		}
-
-		err = ex.initAgent(s, identifier)
+		err = ex.initAgent(s)
 
 		if err != nil {
 			return err
@@ -130,13 +134,14 @@ func (ex *Executor) HandleCommand(s *node.Session, msg *common.Message) error {
 
 	if msg.Command == DTMFEvent {
 		// DTMF is sent over RPC
-
 		dtfm := msg.Data.(DTMFPayload)
 		_, err := ex.performRPC(s, "handle_dtmf", map[string]string{"digit": dtfm.Digit})
 
 		if err != nil {
 			return err
 		}
+
+		// TODO: handle response (e.g., send some command to the AI agent)
 
 		return nil
 	}
@@ -154,28 +159,53 @@ func (ex *Executor) Disconnect(s *node.Session) error {
 	return ex.node.Disconnect(s)
 }
 
-func (ex *Executor) initAgent(s *node.Session, identifier string) error {
-	openAIKey := strChannelState(s, identifier, "openai_key")
+// Supported RPC response types
+const configEvent = "openai.configuration"
 
-	if openAIKey == "" {
-		return errors.New("OpenAI key is not set")
+type OpenAIConfigData struct {
+	APIKey string `json:"api_key"`
+	Model  string `json:"model,omitempty"`
+	Voice  string `json:"voice,omitempty"`
+	Prompt string `json:"prompt,omitempty"`
+}
+
+func (ex *Executor) initAgent(s *node.Session) error {
+	// Retrieve AI configuration from the main app
+	res, err := ex.performRPC(s, "configure_openai", nil)
+
+	if err != nil {
+		return err
 	}
 
-	conf := agent.NewConfig(openAIKey)
-
-	openAIModel := strChannelState(s, identifier, "openai_model")
-	if openAIModel != "" {
-		conf.Model = openAIModel
+	if res == nil {
+		// No response from the main app, do not start the AI
+		return nil
 	}
 
-	openAIVoice := strChannelState(s, identifier, "ai_voice")
-	if openAIVoice != "" {
-		conf.Voice = openAIVoice
+	if res.Event != configEvent {
+		return fmt.Errorf("unexpected response type from RPC: %s", res.Event)
+	}
+
+	var data OpenAIConfigData
+
+	err = json.Unmarshal(res.Data, &data)
+	if err != nil {
+		return errorx.Decorate(err, "failed to parse OpenAI config from RPC")
+	}
+
+	conf := agent.NewConfig(data.APIKey)
+
+	if data.Model != "" {
+		conf.Model = data.Model
+	}
+
+	if data.Voice != "" {
+		conf.Voice = data.Voice
 	}
 
 	agent := agent.NewAgent(conf, s.Log)
 
-	err := agent.KickOff(context.Background())
+	err = agent.KickOff(context.Background())
 	if err != nil {
 		return err
 	}
@@ -195,62 +225,54 @@ func (ex *Executor) getAI(s *node.Session) *agent.Agent {
 	return ai
 }
 
-func (ex *Executor) performRPC(s *node.Session, action string, data map[string]string) (*common.CommandResult, error) {
-	var callSID string
-	var streamSID string
-
-	if val, found := s.ReadInternalState("callSid"); found {
-		callSID = val.(string)
-	} else {
-		return nil, errors.New("Call SID not found")
-	}
-
-	if val, found := s.ReadInternalState("streamSid"); found {
-		streamSID = val.(string)
-	} else {
-		return nil, errors.New("Stream SID not found")
+func (ex *Executor) performRPC(s *node.Session, action string, data map[string]string) (*AppResponse, error) {
+	if data == nil {
+		data = make(map[string]string)
 	}
 
 	data["action"] = action
 
 	payload := utils.ToJSON(data)
 
-	return ex.node.Perform(s, &common.Message{
-		Identifier: channelId(callSID, streamSID),
+	identifier := channelId(s)
+
+	res, err := ex.node.Perform(s, &common.Message{
+		Identifier: identifier,
 		Command:    "message",
 		Data:       string(payload),
 	})
-}
-
-func strChannelState(s *node.Session, identifier string, key string) string {
-	jsonVal := s.GetEnv().GetChannelStateField(identifier, key)
-
-	if jsonVal == "" {
-		return ""
-	}
-
-	var val string
-	err := json.Unmarshal([]byte(jsonVal), &val)
 
 	if err != nil {
-		return ""
+		return nil, err
 	}
 
-	return val
+	if res == nil {
+		return nil, nil
+	}
+
+	// Fetch response from the RPC
+	rawRes := res.IState[responseState]
+	if rawRes == "" {
+		return nil, nil
+	}
+
+	// Cleanup the channel state — we don't need to carry this state around
+	st := (*s.GetEnv().ChannelStates)[identifier]
+	delete(st, responseState)
+
+	var rpcRes AppResponse
+	err = json.Unmarshal([]byte(rawRes), &rpcRes)
+	if err != nil {
+		return nil, errorx.Decorate(err, "failed to parse RPC response")
+	}
+
+	return &rpcRes, nil
 }
 
-func channelId(callSid string, streamSid string) string {
+func channelId(s *node.Session) string {
 	msg := struct {
-		Channel   string `json:"channel"`
-		CallSid   string `json:"call_sid"`
-		StreamSid string `json:"stream_sid"`
-	}{Channel: channelName, CallSid: callSid, StreamSid: streamSid}
+		Channel string `json:"channel"`
+	}{Channel: channelName}
 
-	b, err := json.Marshal(msg)
-
-	if err != nil {
-		panic("Failed to build channel identifier 😲")
-	}
-
-	return string(b)
+	return string(utils.ToJSON(msg))
 }

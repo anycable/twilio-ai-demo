@@ -8,6 +8,12 @@ import (
 func CustomOptions(conf *config.Config) func() ([]cli.Flag, error) {
 	return func() ([]cli.Flag, error) {
 		return []cli.Flag{
+				&cli.StringFlag{
+					Category:    "TWILIO",
+					Name:        "twilio_account_sid",
+					EnvVars:     []string{"TWILIO_ACCOUNT_SID"},
+					Destination: &conf.Twilio.AccountSID,
+				},
 				&cli.BoolFlag{
 					Category:    "MISC",
 					Name:        "fake_rpc",

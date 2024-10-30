@@ -65,7 +65,7 @@ func twilioWebsocketHandler(config *config.Config) func(n *node.Node, c *aconfig
 	return func(n *node.Node, c *aconfig.Config, lg *slog.Logger) (http.Handler, error) {
 		extractor := server.DefaultHeadersExtractor{Headers: c.RPC.ProxyHeaders, Cookies: c.RPC.ProxyCookies}
 
-		executor := twilio.NewExecutor(n, config)
+		executor := twilio.NewExecutor(n, config.Twilio)
 
 		lg.Info(fmt.Sprintf("Handle Twilio Media Streams connections at ws://%s:%d/twilio", c.Server.Host, c.Server.Port))
 

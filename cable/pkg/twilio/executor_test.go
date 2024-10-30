@@ -1,6 +1,7 @@
 package twilio
 
 import (
+	"encoding/json"
 	"log/slog"
 	"strconv"
 	"testing"
@@ -10,7 +11,6 @@ import (
 	"github.com/anycable/anycable-go/mocks"
 	"github.com/anycable/anycable-go/node"
 	"github.com/anycable/anycable-go/node_mocks"
-	"github.com/palkan/twilio-ai-cable/pkg/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -19,7 +19,7 @@ import (
 func TestHandleCommandConnected(t *testing.T) {
 	app := &node_mocks.AppNode{}
 	n := NewMockNode()
-	c := config.NewConfig()
+	c := NewConfig()
 	executor := NewExecutor(app, c)
 
 	t.Run("when not connected", func(t *testing.T) {
@@ -46,7 +46,7 @@ func TestHandleCommandConnected(t *testing.T) {
 func TestHandleCommandStart(t *testing.T) {
 	app := &node_mocks.AppNode{}
 	n := NewMockNode()
-	c := config.NewConfig()
+	c := NewConfig()
 	executor := NewExecutor(app, c)
 
 	t.Run("when not connected", func(t *testing.T) {
@@ -63,24 +63,29 @@ func TestHandleCommandStart(t *testing.T) {
 		conn := mocks.NewMockConnection()
 		session := buildSession(conn, n, executor, true)
 
-		start := StartPayload{AccountSID: "ac42", CallSID: "ca123"}
+		start := StartPayload{AccountSID: "ac42", CallSID: "ca123", StreamSID: "sm123"}
 
 		// We should call authenticate
-		app.On("Authenticate", session).Return(&common.ConnectResult{Status: common.SUCCESS}, nil).Run(func(args mock.Arguments) {
-			s := args.Get(0).(*node.Session)
-			headers := (*s.GetEnv().Headers)
-			val, ok := headers["x-twilio-account"]
+		app.On("Authenticated", session, mock.Anything).Run(func(args mock.Arguments) {
+			identifiersJSON := args.Get(1).(string)
 
-			if !ok {
-				require.True(t, ok, "Header is missing")
-			}
+			var identifiers map[string]string
+			err := json.Unmarshal([]byte(identifiersJSON), &identifiers)
 
-			assert.Equal(t, "ac42", val)
+			require.NoError(t, err)
+
+			assert.Equal(t, "ca123", identifiers["call_sid"])
+			assert.Equal(t, "sm123", identifiers["stream_sid"])
 		})
 
 		// And also subscribe to a channel (in authenticate passes)
 		app.
-			On("Subscribe", session, &common.Message{Identifier: channelId("ca123"), Command: "subscribe"}).
+			On("Subscribe", session, &common.Message{Identifier: channelId(session), Command: "subscribe"}).
+			Return(nil, nil)
+
+		// And perform AI configure step
+		app.
+			On("Perform", session, &common.Message{Identifier: channelId(session), Command: "message", Data: `{"action":"configure_openai"}`}).
 			Return(nil, nil)
 
 		err := executor.HandleCommand(session, &common.Message{
@@ -95,7 +100,7 @@ func TestHandleCommandStart(t *testing.T) {
 
 func TestHandleCommandMedia(t *testing.T) {
 	n := NewMockNode()
-	c := config.NewConfig()
+	c := NewConfig()
 	executor := NewExecutor(n, c)
 
 	t.Run("when not connected", func(t *testing.T) {
@@ -111,7 +116,7 @@ func TestHandleCommandMedia(t *testing.T) {
 
 func TestHandleCommandMark(t *testing.T) {
 	n := NewMockNode()
-	c := config.NewConfig()
+	c := NewConfig()
 	executor := NewExecutor(n, c)
 
 	t.Run("when not connected", func(t *testing.T) {
