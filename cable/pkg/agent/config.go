@@ -6,6 +6,8 @@ type Config struct {
 	Model  string
 	Voice  string
 	Prompt string
+	// we just pass them as is to the AI
+	Tools interface{}
 }
 
 func NewConfig(key string) *Config {

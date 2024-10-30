@@ -171,6 +171,7 @@ type OpenAIConfigData struct {
 	Model  string `json:"model,omitempty"`
 	Voice  string `json:"voice,omitempty"`
 	Prompt string `json:"prompt,omitempty"`
+	Tools  string `json:"tools,omitempty"`
 }
 
 func (ex *Executor) initAgent(s *node.Session) error {
@@ -211,13 +212,17 @@ func (ex *Executor) initAgent(s *node.Session) error {
 		conf.Prompt = data.Prompt
 	}
 
+	if data.Tools != "" {
+		conf.Tools = json.RawMessage(data.Tools)
+	}
+
 	agent := agent.NewAgent(conf, s.Log)
 
 	agent.HandleTranscript(func(role string, text string, id string) {
 		_, err := ex.performRPC(s, "handle_transcript", map[string]string{"role": role, "text": text, "id": id})
 
 		if err != nil {
-			s.Log.Error("failed to peroform handle_transcript rpc", "error", err)
+			s.Log.Error("failed to perform handle_transcript rpc", "error", err)
 		}
 	})
 
@@ -231,6 +236,18 @@ func (ex *Executor) initAgent(s *node.Session) error {
 
 		s.Send(&common.Reply{Type: MediaEvent, Message: MediaPayload{Payload: encodedAudio}, Identifier: streamSid})
 		s.Send(&common.Reply{Type: MarkEvent, Message: MarkPayload{Name: `ai-delta-` + id}, Identifier: streamSid})
+	})
+
+	agent.HandleFunctionCall(func(name string, args string, id string) {
+		res, err := ex.performRPC(s, "handle_function_call", map[string]string{"name": name, "arguments": args})
+
+		if err != nil {
+			s.Log.Error("failed to perform handle_function_call rpc", "error", err)
+		}
+
+		if res != nil && res.Event == "openai.function_call_result" {
+			agent.HandleFunctionCallResult(id, string(res.Data))
+		}
 	})
 
 	err = agent.KickOff(context.Background())

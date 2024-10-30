@@ -1,4 +1,4 @@
 module Twilio
-  class PhoneCall < Data.define(:sid, :status, :from, :to)
+  class PhoneCall < Data.define(:sid, :from, :to)
   end
 end

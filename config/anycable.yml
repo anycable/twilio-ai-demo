@@ -19,6 +19,8 @@ default: &default
   http_broadcast_url: "http://localhost:8090/_broadcast"
   # Must be the same as in your AnyCable server config
   secret: "anycable-local-secret"
+  # Automatically batch broadcasts
+  batch_broadcasts: true
 
 development:
   <<: *default

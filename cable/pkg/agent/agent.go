@@ -17,6 +17,7 @@ import (
 
 type TranscriptHandler = func(role string, text string, id string)
 type AudioHandler = func(data string, id string)
+type FunctionHandler = func(name string, args string, id string)
 
 // Agent represents a single Twilio Stream consumer connected
 // to OpenAI realtime API
@@ -31,6 +32,7 @@ type Agent struct {
 
 	transcriptHandler TranscriptHandler
 	audioHandler      AudioHandler
+	functionHandler   FunctionHandler
 
 	cancelFn context.CancelFunc
 	connMu   sync.RWMutex
@@ -59,6 +61,10 @@ func (a *Agent) HandleTranscript(handler TranscriptHandler) {
 
 func (a *Agent) HandleAudio(handler AudioHandler) {
 	a.audioHandler = handler
+}
+
+func (a *Agent) HandleFunctionCall(handler FunctionHandler) {
+	a.functionHandler = handler
 }
 
 // KickOff starts the OpenAI WebSocket connection.
@@ -100,6 +106,10 @@ func (a *Agent) KickOff(ctx context.Context) error {
 		sessionConfig["session"].(map[string]interface{})["instructions"] = a.conf.Prompt
 	}
 
+	if a.conf.Tools != nil {
+		sessionConfig["session"].(map[string]interface{})["tools"] = a.conf.Tools
+	}
+
 	configMessage := utils.ToJSON(sessionConfig)
 	a.sendMsg(configMessage)
 
@@ -107,6 +117,23 @@ func (a *Agent) KickOff(ctx context.Context) error {
 	go a.writeMessages(ctx)
 
 	return nil
+}
+
+func (a *Agent) HandleFunctionCallResult(callID string, data string) {
+	item := &Item{Type: "function_call_output", CallID: callID, Output: data}
+
+	msg := struct {
+		Type string `json:"type"`
+		Item *Item  `json:"item"`
+	}{"conversation.item.create", item}
+
+	encoded := utils.ToJSON(msg)
+
+	a.log.Warn("sending function call result", "data", string(encoded))
+
+	a.sendMsg(encoded)
+	// Send `response.create` message right away to trigger model inference
+	a.sendMsg([]byte(`{"type":"response.create"}`))
 }
 
 func (a *Agent) EnqueueAudio(audio []byte) error {
@@ -187,9 +214,24 @@ func (a *Agent) readMessages() {
 			_ = json.Unmarshal(msg, &event)
 
 			a.handleTranscript(event)
+		case "response.function_call_arguments.delta":
+		case "response.function_call_arguments.done":
 		case "response.content_part.done":
 		case "response.output_item.done":
+			var event *OutputItemDoneEvent
+			_ = json.Unmarshal(msg, &event)
+
+			if event.Item.Type == "function_call" {
+				a.handleFunctionCall(event.Item)
+			}
 		case "response.done":
+			var event *ResponseEvent
+			_ = json.Unmarshal(msg, &event)
+
+			// Log errors
+			if event.Response.Status == "failed" {
+				a.log.Error("request failed", "error", event.Response.StatusDetails.Error)
+			}
 		case "error":
 			a.log.Error("server error", "err", string(msg))
 		default:
@@ -246,5 +288,13 @@ func (a *Agent) handleTranscript(ev TranscriptEvent) {
 func (a *Agent) handleAudio(ev *AudioDeltaEvent) {
 	if a.audioHandler != nil {
 		a.audioHandler(ev.Delta, ev.ItemId)
+	}
+}
+
+func (a *Agent) handleFunctionCall(item *Item) {
+	a.log.Debug("agent is trying to call a function", "name", item.Name, "args", item.Arguments, "id", item.CallID)
+
+	if a.functionHandler != nil {
+		a.functionHandler(item.Name, item.Arguments, item.CallID)
 	}
 }

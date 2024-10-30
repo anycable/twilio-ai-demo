@@ -5,7 +5,7 @@ class TwilioService
     @config = config
   end
 
-  def make_call(to:, phrase:, timeout: 30)
+  def make_call(to:, phrase: nil, timeout: 60)
     call = client.calls.create(
       twiml: setup_stream_response(phrase),
       to: to,
@@ -31,6 +31,15 @@ class TwilioService
       target: "call-#{call_sid}-logs",
       partial: "phone_calls/phone_call_log",
       locals: {text: msg, id:}
+    )
+  end
+
+  def broadcast_phone_call(phone_call, status)
+    Turbo::StreamsChannel.broadcast_prepend_to(
+      "phone_calls",
+      target: "callList",
+      partial: "phone_calls/phone_call",
+      locals: {phone_call:, status:}
     )
   end
 

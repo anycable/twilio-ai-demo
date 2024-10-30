@@ -1,5 +1,6 @@
 default: &default
-  phone_number: "+18775357613"
+  # Phone number to make calls from or to
+  # phone_number: "+123456789"
 
 development:
   <<: *default

@@ -19,6 +19,10 @@ dialog::backdrop {
   animation: pulse 2s ease-in-out infinite;
 }
 
+.call-status--active {
+  @apply text-green-600;
+}
+
 .call-status--completed {
   @apply text-orange-600;
 }
