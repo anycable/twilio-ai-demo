@@ -1,13 +1,14 @@
 <!DOCTYPE html>
 <html class="<%= "debug" if params[:__debug] == "1" %>">
   <head>
-    <title><%= content_for(:title) || "Twilio Ai Demo" %></title>
+    <title><%= content_for(:title) || "Twilio AI Demo" %></title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <%= csrf_meta_tags %>
     <%= csp_meta_tag %>
     <%= action_cable_meta_tag %>
+    <meta name="action-cable-history-timestamp" content="<%= 5.minutes.ago.to_i %>">
 
     <%= yield :head %>
 
