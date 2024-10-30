@@ -26,7 +26,8 @@ Rails.application.configure do
   end
 
   # Change to :null_store to avoid any caching.
-  config.cache_store = :memory_store
+  config.cache_store = :file_store, "tmp/rails-cache-dev"
+  # config.cache_store = :memory_store
 
   # Print deprecation notices to the Rails logger.
   config.active_support.deprecation = :log

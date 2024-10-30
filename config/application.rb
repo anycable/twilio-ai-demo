@@ -18,6 +18,10 @@ require "action_cable/engine"
 # you've limited to :test, :development, or :production.
 Bundler.require(*Rails.groups)
 
+require_relative "initializers/inflections"
+# Audio conversion utilities
+require_relative "../lib/g711"
+
 module TwilioAiDemo
   class Application < Rails::Application
     # Configure the path for configuration classes that should be used before initialization

@@ -14,6 +14,9 @@ gem "tailwindcss-rails"
 
 gem "anyway_config"
 gem "twilio-ruby"
+gem "ruby-openai"
+
+gem "faker"
 
 group :development do
   gem "overmind"

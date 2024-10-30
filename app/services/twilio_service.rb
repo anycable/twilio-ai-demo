@@ -5,9 +5,21 @@ class TwilioService
     @config = config
   end
 
-  def setup_stream_response
+  def make_call(to:, phrase:, timeout: 30)
+    call = client.calls.create(
+      twiml: setup_stream_response(phrase),
+      to: to,
+      from: config.phone_number,
+      timeout: timeout
+    )
+    call.sid
+  end
+
+  DEFAULT_WELCOME_PHRASE = "Hey! Let me connect you to our AI agent..."
+
+  def setup_stream_response(message = DEFAULT_WELCOME_PHRASE)
     Twilio::TwiML::VoiceResponse.new do |r|
-      r.say(message: "Hey! Let's see what's on your plate. Connecting you to an agent...")
+      r.say(message:)
       r.connect do
         _1.stream(url: config.stream_callback)
       end

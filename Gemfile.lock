@@ -106,10 +106,15 @@ GEM
       reline (>= 0.3.8)
     drb (2.2.1)
     erubi (1.13.0)
+    event_stream_parser (1.0.0)
+    faker (3.5.1)
+      i18n (>= 1.8.11, < 2)
     faraday (2.12.0)
       faraday-net_http (>= 2.0, < 3.4)
       json
       logger
+    faraday-multipart (1.0.4)
+      multipart-post (~> 2)
     faraday-net_http (3.3.0)
       net-http
     globalid (1.2.1)
@@ -165,6 +170,7 @@ GEM
     marcel (1.0.4)
     mini_mime (1.1.5)
     minitest (5.25.1)
+    multipart-post (2.4.1)
     net-http (0.4.1)
       uri
     net-imap (0.5.0)
@@ -248,6 +254,10 @@ GEM
     reline (0.5.10)
       io-console (~> 0.5)
     ruby-next-core (1.0.3)
+    ruby-openai (7.3.1)
+      event_stream_parser (>= 0.3.0, < 2.0.0)
+      faraday (>= 1)
+      faraday-multipart (>= 1)
     securerandom (0.3.1)
     sqlite3 (2.1.1-aarch64-linux-gnu)
     sqlite3 (2.1.1-aarch64-linux-musl)
@@ -311,11 +321,13 @@ DEPENDENCIES
   anycable-rails
   anyway_config
   debug
+  faker
   importmap-rails
   overmind
   propshaft
   puma (>= 5.0)
   rails (~> 8.0.0.rc1)
+  ruby-openai
   sqlite3 (>= 2.1)
   stimulus-rails
   tailwindcss-rails
