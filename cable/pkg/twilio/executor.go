@@ -7,6 +7,7 @@ import (
 
 	"github.com/anycable/anycable-go/common"
 	"github.com/anycable/anycable-go/node"
+	"github.com/anycable/anycable-go/utils"
 	"github.com/anycable/anycable-go/ws"
 
 	"github.com/palkan/twilio-ai-cable/pkg/config"
@@ -99,6 +100,22 @@ func (ex *Executor) HandleCommand(s *node.Session, msg *common.Message) error {
 
 	if msg.Command == MarkEvent {
 		s.Log.Debug("mark received", "msg", msg.Data)
+		// TODO: Here we can track which media messages has been processed,
+		// so we can implement some clearing logic.
+		// See https://www.twilio.com/docs/voice/media-streams/websocket-messages#send-a-clear-message
+		return nil
+	}
+
+	if msg.Command == DTMFEvent {
+		// DTMF is sent over RPC
+
+		dtfm := msg.Data.(DTMFPayload)
+		_, err := ex.performRPC(s, "handle_dtmf", map[string]string{"digit": dtfm.Digit})
+
+		if err != nil {
+			return err
+		}
+
 		return nil
 	}
 
@@ -108,6 +125,21 @@ func (ex *Executor) HandleCommand(s *node.Session, msg *common.Message) error {
 func (ex *Executor) Disconnect(s *node.Session) error {
 	// TODO: implement AI session cleanup
 	return ex.node.Disconnect(s)
+}
+
+func (ex *Executor) performRPC(s *node.Session, action string, data map[string]string) (*common.CommandResult, error) {
+	callSID := s.InternalState["callSid"].(string)
+	streamSID := s.InternalState["streamSid"].(string)
+
+	data["action"] = action
+
+	payload := utils.ToJSON(data)
+
+	return ex.node.Perform(s, &common.Message{
+		Identifier: channelId(callSID, streamSID),
+		Command:    "message",
+		Data:       string(payload),
+	})
 }
 
 func channelId(callSid string, streamSid string) string {

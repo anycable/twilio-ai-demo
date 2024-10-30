@@ -24,6 +24,7 @@ type DecodeMessage struct {
 	Media MediaPayload `json:"media,omitempty"`
 	Stop  StopPayload  `json:"stop,omitempty"`
 	Mark  MarkPayload  `json:"mark,omitempty"`
+	DTMF  DTMFPayload  `json:"dtmf,omitempty"`
 }
 
 var _ encoders.Encoder = (*Encoder)(nil)
@@ -118,6 +119,8 @@ func (Encoder) Decode(raw []byte) (*common.Message, error) {
 		data = twMsg.Mark
 	case StopEvent:
 		data = twMsg.Stop
+	case DTMFEvent:
+		data = twMsg.DTMF
 	}
 
 	msg := common.Message{Command: twMsg.Event, Identifier: twMsg.StreamSID, Data: data}

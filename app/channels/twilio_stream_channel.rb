@@ -11,6 +11,10 @@ class TwilioStreamChannel < ApplicationChannel
     transmit_message(:greeting, greeting)
   end
 
+  def handle_dtmf(data)
+    broadcast_log "< Pressed ##{data["digit"]}"
+  end
+
   def unsubscribed
     broadcast_log "Media stream has stopped"
   end
