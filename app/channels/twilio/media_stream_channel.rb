@@ -1,5 +1,7 @@
 module Twilio
   class MediaStreamChannel < ApplicationChannel
+    include OpenAITools
+
     state_attr_accessor :ai_voice
 
     def subscribed
@@ -55,58 +57,9 @@ module Twilio
       voice = ai_voice
       prompt = config.prompt
 
-      # Generate tools configuration
-      # TODO: That could be done via metaprogramming based on the #handle_function_call contents.
+      # Get tools configuration from this class
       # NOTE: with pass tools configuration as JSON to not deal with serialization/deserialization at the server side.
-      tools = [
-        {
-          type: "function",
-          name: "get_tasks",
-          description: "Fetch user's tasks for a given period of time",
-          parameters: {
-            type: "object",
-            properties: {
-              period: {
-                type: "string",
-                enum: ["today", "tomorrow", "week"]
-              }
-            },
-            required: ["period"]
-          }
-        },
-        {
-          type: "function",
-          name: "create_task",
-          description: "Create a new task for a specified date",
-          parameters: {
-            type: "object",
-            properties: {
-              date: {
-                type: "string",
-                format: "date"
-              },
-              description: {
-                type: "string"
-              }
-            },
-            required: ["date", "description"]
-          }
-        },
-        {
-          type: "function",
-          name: "complete_task",
-          description: "Mark a task as completed",
-          parameters: {
-            type: "object",
-            properties: {
-              id: {
-                type: "integer"
-              }
-            },
-            required: ["id"]
-          }
-        }
-      ].to_json
+      tools = self.class.openai_tools_schema.to_json
 
       reply_with("openai.configuration", {api_key:, voice:, prompt:, tools:})
     end
@@ -118,40 +71,53 @@ module Twilio
     end
 
     def handle_function_call(data)
-      name = data["name"]
+      name = data["name"].to_sym
       args = JSON.parse(data["arguments"], symbolize_names: true)
+
+      return unless self.class.openai_tools.include?(name)
 
       broadcast_log "# Invoke: #{name}(#{data["arguments"]})"
 
-      case [name, args]
-      in "get_tasks", {period: "today" | "tomorrow" | "week" => period}
-        range = case period
-        when "today"
-          Date.current.all_day
-        when "tomorrow"
-          Date.tomorrow.all_day
-        when "week"
-          Date.current.all_week
-        end
+      result = public_send(name, **args)
 
-        todos = Todo.incomplete.where(deadline: range).as_json(only: [:id, :deadline, :description])
+      reply_with("openai.function_call_result", result)
+    end
 
-        reply_with("openai.function_call_result", {todos:})
-      in "create_task", {date: String => deadline, description: String => description}
-        todo = Todo.new(deadline:, description:)
-        if todo.save
-          reply_with("openai.function_call_result", {status: :created, todo: todo.as_json(only: [:id, :deadline, :description])})
-        else
-          reply_with("openai.function_call_result", {status: :failed, message: todo.errors.full_messages.join(", ")})
-        end
-      in "complete_task", {id: Integer => id}
-        todo = Todo.find_by(id: id)
-        if todo
-          todo.update!(completed: true)
-          reply_with("openai.function_call_result", {status: :completed})
-        else
-          reply_with("openai.function_call_result", {status: :failed, message: "Task not found"})
-        end
+    # Fetch user's tasks for a given period of time.
+    # @rbs (period: (:today | :tomorrow | :week)) -> Array[Todo]
+    tool def get_tasks(period:)
+      range = case period
+      when "today"
+        Date.current.all_day
+      when "tomorrow"
+        Date.tomorrow.all_day
+      when "week"
+        Date.current.all_week
+      end
+
+      {todos: Todo.incomplete.where(deadline: range).as_json(only: [:id, :deadline, :description])}
+    end
+
+    # Create a new task for a specified date
+    # @rbs (deadline: Date, description: String) -> {status: (:created | :failed), ?todo: Todo}
+    tool def create_task(deadline:, description:)
+      todo = Todo.new(deadline:, description:)
+      if todo.save
+        {status: :created, todo: todo.as_json(only: [:id, :deadline, :description])}
+      else
+        {status: :failed, message: todo.errors.full_messages.join(", ")}
+      end
+    end
+
+    # Mark a task as completed
+    # @rbs (id: Integer) -> {status: (:completed | :failed), ?message: String}
+    tool def complete_task(id:)
+      todo = Todo.find_by(id: id)
+      if todo
+        todo.update!(completed: true)
+        {status: :completed}
+      else
+        {status: :failed, message: "Task not found"}
       end
     end
 
