@@ -21,6 +21,7 @@ Bundler.require(*Rails.groups)
 require_relative "initializers/inflections"
 # Audio conversion utilities
 require_relative "../lib/g711"
+require_relative "../lib/rbs_tools"
 
 module TwilioAiDemo
   class Application < Rails::Application
