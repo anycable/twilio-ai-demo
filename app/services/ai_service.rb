@@ -18,7 +18,7 @@ class AIService
     Rails.cache.fetch("ai:audio:#{voice}:#{phrase.parameterize}") do
       client.audio.speech(
         parameters: {
-          model: "tts-1",
+          model: "tts-1-hd",
           input: phrase,
           voice:,
           response_format: "pcm"

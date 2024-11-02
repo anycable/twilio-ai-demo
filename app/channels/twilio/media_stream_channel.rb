@@ -9,20 +9,47 @@ module Twilio
 
       self.ai_voice = AIService::VOICES.sample
 
-      greeting = "Hi, I'm #{ai_voice.humanize}. " \
-        "I can tell you about your planned tasks and " \
-        "help to you manage them. What would you like to do?"
+      greeting =
+        if OpenAIConfig.realtime_enabled?
+          "Hi, I'm #{ai_voice.humanize}. " \
+          "I can tell you about your planned tasks and " \
+          "help to you manage them. What would you like to do?"
+        else
+          "Hi, I'm #{ai_voice.humanize}. " \
+          "Press 1 to check tasks for today. " \
+          "Press 2 to check tasks for tomorrow. " \
+          "Press 3 to check tasks for this week."
+        end
 
       transmit_message(:greeting, greeting)
     end
 
     def handle_dtmf(data)
-      broadcast_log "< Pressed ##{data["digit"]}"
+      digit = data["digit"].to_i
+      broadcast_log "< Pressed ##{digit}"
+
+      todos, period =
+        case digit
+        when 1 then [Todo.incomplete.where(deadline: Date.current.all_day), "today"]
+        when 2 then [Todo.incomplete.where(deadline: Date.tomorrow.all_day), "tomorrow"]
+        when 3 then [Todo.incomplete.where(deadline: Date.current.all_week), "this week"]
+        end
+
+      return unless todos
+
+      phrase = if todos.any?
+        "Here is what you have for #{period}:\n#{todos.map(&:description).join(",")}"
+      else
+        "You don't have any tasks for #{period}"
+      end
+
+      transmit_message(:"dtmf_response_#{digit}", phrase)
     end
 
     # OpenAI tools
     def configure_openai
       config = OpenAIConfig
+      return unless config.realtime_enabled?
 
       api_key = config.api_key
       voice = ai_voice
