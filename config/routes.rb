@@ -9,8 +9,8 @@ Rails.application.routes.draw do
 
   resources :phone_calls, only: [:index]
 
-  namespace :callbacks do
-    post "/twilio" => "twilio_status#create"
+  namespace :twilio do
+    resource :status, only: :create
   end
 
   # Define your application routes per the DSL in https://guides.rubyonrails.org/routing.html

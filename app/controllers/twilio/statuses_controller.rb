@@ -1,6 +1,8 @@
-module Callbacks
-  # Handle Twilio webhooks
-  class TwilioStatusController < ApplicationController
+module Twilio
+  # Handle Twilio status webhooks
+  class StatusesController < ApplicationController
+    skip_before_action :verify_authenticity_token
+
     # TODO: Check X-Twilio-Signature
     # See https://www.twilio.com/docs/usage/webhooks/getting-started-twilio-webhooks#validate-that-webhook-requests-are-coming-from-twilio
     # before_aciton :verify_twilio_request

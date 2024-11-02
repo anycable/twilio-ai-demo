@@ -31,7 +31,7 @@ sessions_ttl = 300
 [rpc]
 host = "localhost:50051"
 # Specify HTTP headers that must be proxied to the RPC service
-proxy_headers = ["cookie"]
+proxy_headers = []
 # RPC concurrency (max number of concurrent RPC requests)
 concurrency = 28
 
