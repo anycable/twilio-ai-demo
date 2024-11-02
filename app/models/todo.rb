@@ -11,6 +11,7 @@ class Todo < ApplicationRecord
   # Realtime features
   after_create_commit { broadcast_replace_to "todos", target: "new_item_notification", partial: "todos/item_added", locals: {todo: self} }
   after_update_commit { broadcast_replace_to "todos" }
+  after_destroy_commit { broadcast_remove_to "todos" }
 
   scope :completed, -> { where.not(completed_at: nil) }
   scope :incomplete, -> { where(completed_at: nil) }
