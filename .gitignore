@@ -41,3 +41,5 @@ bin/dist
 /config/credentials/local.*
 
 /config/credentials/development.key
+
+/config/credentials/production.key

@@ -7,3 +7,6 @@ development:
 
 production:
   <<: *default
+  phone_number: "+18775357613"
+  status_callback: https://twilio-ai-demo.fly.dev/twilio/status
+  stream_callback: wss://twilio-cable.fly.dev/twilio

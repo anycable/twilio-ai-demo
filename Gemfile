@@ -21,6 +21,7 @@ gem "faker"
 
 group :development do
   gem "overmind"
+  gem "dockerfile-rails", ">= 1.6"
 end
 
 group :development, :test do

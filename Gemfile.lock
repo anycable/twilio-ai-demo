@@ -104,6 +104,8 @@ GEM
     debug (1.9.2)
       irb (~> 1.10)
       reline (>= 0.3.8)
+    dockerfile-rails (1.6.24)
+      rails (>= 3.0.0)
     drb (2.2.1)
     erubi (1.13.0)
     event_stream_parser (1.0.0)
@@ -327,6 +329,7 @@ DEPENDENCIES
   anycable-rails
   anyway_config
   debug
+  dockerfile-rails (>= 1.6)
   faker
   importmap-rails
   overmind
