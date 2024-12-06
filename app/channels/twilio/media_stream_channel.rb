@@ -121,6 +121,18 @@ module Twilio
       end
     end
 
+    # Deleate a task
+    # @rbs (id: Integer) -> {status: (:completed | :failed), ?message: String}
+    tool def delete_task(id:)
+      todo = Todo.find_by(id: id)
+      if todo
+        todo.destroy!
+        {status: :completed}
+      else
+        {status: :failed, message: "Task not found"}
+      end
+    end
+
     def unsubscribed
       broadcast_log "Media stream has stopped"
 
