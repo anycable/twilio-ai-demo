@@ -3,6 +3,9 @@
 This application demonstrates how to use [AnyCable](https://anycable.io) to interact with voice calls via Twilio Streams
 and OpenAI Realtime API.
 
+> [!TIP] 
+> Read the blog post to learn more about how AnyCable helps to bring phone calls and AI together: [Hey, AnyCable speaking! Needing help with a Twilio-OpenAI connection?](https://evilmartians.com/chronicles/anycable-speaking-needing-help-with-a-twilio-openai-connection).
+
 The app consists of two parts:
 
 - A Ruby on Rails application that provides a web UI to ToDo items.
