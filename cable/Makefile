@@ -29,6 +29,15 @@ install:
 build:
 	go build -ldflags $(LD_FLAGS) -o $(OUTPUT) cmd/$(BIN_NAME)/main.go
 
+build-linux:
+	env GOOS=linux GOARCH=amd64 $(GOBUILD) -o "../.fly/twilio-cable/dist/cable" cmd/$(BIN_NAME)/main.go
+
+build-all: build-clean
+	env GOOS=linux   GOARCH=arm64 $(GOBUILD) -o "dist//$(BIN_NAME)-Linux-arm64"   cmd/$(BIN_NAME)/main.go
+	env GOOS=linux   GOARCH=amd64 $(GOBUILD) -o "dist//$(BIN_NAME)-Linux-x86_64"  cmd/$(BIN_NAME)/main.go
+	env GOOS=darwin  GOARCH=arm64 $(GOBUILD) -o "dist//$(BIN_NAME)-Darwin-arm64"  cmd/$(BIN_NAME)/main.go
+	env GOOS=darwin  GOARCH=amd64 $(GOBUILD) -o "dist//$(BIN_NAME)-Darwin-x86_64" cmd/$(BIN_NAME)/main.go
+
 build-clean:
 	rm -rf ./dist
 

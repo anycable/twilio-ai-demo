@@ -183,6 +183,8 @@ func (ex *Executor) initAgent(s *node.Session) error {
 	}
 
 	if res == nil {
+		s.Log.Warn("No OpenAI configuration, skipping agent", "res", res)
+
 		// No response from the main app, do not start the AI
 		return nil
 	}
